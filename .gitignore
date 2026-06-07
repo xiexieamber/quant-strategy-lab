@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+
+# 数据文件（体积大，不上传 GitHub）
+data/raw/
+data/processed/
+*.csv
+*.parquet
+*.h5
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# macOS
+.DS_Store
+
+# 回测结果
+results/
+reports/*.html
+reports/*.png

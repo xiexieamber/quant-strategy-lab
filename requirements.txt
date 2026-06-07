@@ -1,0 +1,16 @@
+# 数据处理
+pandas>=2.0.0
+numpy>=1.24.0
+
+# 获取免费行情数据（股票、ETF 等）
+yfinance>=0.2.40
+
+# 画图
+matplotlib>=3.7.0
+
+# 配置文件
+pyyaml>=6.0
+
+# 开发工具（可选）
+jupyter>=1.0.0
+pytest>=7.0.0

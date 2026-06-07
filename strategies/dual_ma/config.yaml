@@ -1,0 +1,11 @@
+# 双均线策略配置
+# 修改这里的参数后，重新运行: python scripts/run_backtest.py
+
+symbol: AAPL          # 股票代码（AAPL=苹果, MSFT=微软, 000001.SS=上证指数）
+start: "2020-01-01"   # 回测开始日期
+end: null             # 回测结束日期，null 表示到今天
+
+short_window: 5       # 短期均线天数
+long_window: 20       # 长期均线天数
+
+initial_cash: 100000  # 初始资金（元/美元，取决于标的）
