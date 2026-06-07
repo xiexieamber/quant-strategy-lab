@@ -1,0 +1,58 @@
+---
+description: 聚宽 JQData (jqdatasdk) API 调用规范。编写或修改 A 股数据拉取、jqdatasdk 相关代码时必读。
+globs: src/data/**/*.py,scripts/**/*.py,strategies/**/*
+alwaysApply: false
+---
+
+# 聚宽 JQData API 调用规范
+
+完整参考：`docs/jqdata-api-reference.md`
+
+## 必须用本地 SDK
+
+- 本地项目只用 `jqdatasdk`（`pip install jqdatasdk`）
+- **禁止** 混用聚宽官网在线策略 API（`initialize`/`handle_data` 那套仅用于网页）
+
+## 认证
+
+- 密码从 `.env` 的 `JQ_USERNAME` / `JQ_PASSWORD` 读取
+- 优先调用 `src/data/fetch_jqdata.py` 的 `_ensure_auth()`，不要硬编码密码
+
+## 日期权限（试用账号必查）
+
+```python
+from src.data.fetch_jqdata import get_jq_date_range, fetch_ohlcv_jq
+start, end = get_jq_date_range()  # 账号允许的 date_range_start ~ date_range_end
+```
+
+- 拉数据前必须确保日期在权限范围内
+- 优先用 `fetch_ohlcv_jq()`（内置 `_clamp_date_range`）
+
+## 证券代码
+
+- 深交所：`000001.XSHE`；上交所：`600519.XSHG`
+- 不要用 yfinance 格式（`.SZ`/`.SS`）传给 jqdatasdk
+
+## get_price 关键约束
+
+- `start_date` 与 `count` **二选一**，不可同时传
+- 最近 N 天：`jq.get_price(code, end_date=end, count=N)`
+- 区间：`jq.get_price(code, start_date=start, end_date=end)`
+- 回测日线默认 `fq="pre"`（前复权）
+- 原生返回小写列名；项目内统一用 `fetch_ohlcv_jq` 得到大写 `Open/High/Low/Close/Volume`
+
+## 优先使用项目封装
+
+| 场景 | 函数 |
+|------|------|
+| A 股 OHLCV | `fetch_ohlcv_jq()` |
+| 查权限日期 | `get_jq_date_range()` |
+| 美股 OHLCV | `fetch_ohlcv()` in `fetch_data.py` |
+
+## 写代码前自检
+
+1. 是否用了 jqdatasdk 而非官网 API？
+2. 日期是否在 `get_account_info()` 允许范围内？
+3. 是否避免 start_date + count 同传？
+4. 代码后缀是否为 `.XSHE`/`.XSHG`？
+5. 输出列名是否与回测引擎一致？

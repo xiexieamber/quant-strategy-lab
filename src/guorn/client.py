@@ -38,7 +38,7 @@ def build_headers() -> dict[str, str]:
         "Accept-Language": "zh-CN,zh;q=0.9",
         "Content-Type": "application/json; charset=UTF-8",
         "Origin": "https://guorn.com",
-        "Referer": "https://guorn.com/stock?category=stock",
+        "Referer": "https://guorn.com/stock?category=fund",
         "User-Agent": (
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
             "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"

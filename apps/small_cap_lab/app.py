@@ -20,7 +20,8 @@ import pandas as pd
 import streamlit as st
 
 from src.backtest.small_cap_engine import run_small_cap_backtest
-from src.data.fetch_jqdata import get_jq_date_range
+from src.data.ak_market import get_date_range_hint
+from src.data.jq_cache import QuotaExhaustedError, get_jq_spare_quota
 from src.strategies.small_cap.config import SmallCapConfig
 
 st.set_page_config(
@@ -30,110 +31,195 @@ st.set_page_config(
 )
 
 st.title("📊 小市值策略实验室")
-st.caption("基于聚宽 JQData 本地回测 · 对应果仁 H1 / 模型 II · 不受 VIP 限制")
+st.caption("本地回测 · 对应果仁 H1 / 模型 II · 不受 VIP 限制")
 
-# --- 账号数据范围 ---
-try:
-    jq_start, jq_end = get_jq_date_range()
-    st.info(f"当前 JQData 账号可用数据：**{jq_start}** ~ **{jq_end}**（试用账号通常约 1 年）")
-except Exception as e:
-    st.error(f"聚宽登录失败：{e}\n\n请在项目根目录 `.env` 中配置 `JQ_USERNAME` 和 `JQ_PASSWORD`。")
-    st.stop()
+with st.sidebar:
+    st.header("数据源")
+    data_source = st.radio(
+        "选择数据来源",
+        options=["akshare", "jq"],
+        format_func=lambda x: "AkShare（免费推荐）" if x == "akshare" else "聚宽 JQData",
+        index=0,
+    )
+
+# --- 数据范围提示 ---
+jq_start, jq_end, jq_ok = None, None, False
+ak_start, ak_end = get_date_range_hint()
+
+if data_source == "jq":
+    try:
+        from src.data.fetch_jqdata import get_jq_date_range
+
+        jq_start, jq_end = get_jq_date_range()
+        spare = get_jq_spare_quota()
+        jq_ok = True
+        st.info(
+            f"**JQData** 可用数据：{jq_start} ~ {jq_end}  \n"
+            f"今日剩余额度约 **{spare:,}** 条（每日 100 万）。已缓存数据不会重复下载。"
+        )
+    except Exception as e:
+        st.error(f"聚宽登录失败：{e}\n\n请配置 `.env` 中的 `JQ_USERNAME` / `JQ_PASSWORD`，或改用 AkShare。")
+else:
+    st.success(
+        f"**AkShare** 免费、无每日 100 万条限制。  \n"
+        f"建议回测区间：约 **{ak_start}** ~ **{ak_end}**（可自定义更长，数据来自东方财富）。  \n"
+        f"⚠️ **首次回测**需下载约 4000+ 只股票数据（约 30～60 分钟），之后本地缓存秒开。"
+    )
+
+default_start = pd.Timestamp(jq_start if jq_ok and jq_start else ak_start).date()
+default_end = pd.Timestamp(jq_end if jq_ok and jq_end else ak_end).date()
 
 with st.sidebar:
     st.header("策略参数")
 
     preset = st.selectbox(
         "预设方案",
-        ["H1 基础", "H1 + 1/4月空仓", "H1 + 中证1000择时", "H1 Pro（全风控）", "自定义"],
+        [
+            "H1-Pro 防雷增强（说明书）",
+            "H1 基础",
+            "H1 + 1/4月空仓",
+            "H1 + 中证1000择时",
+            "自定义",
+        ],
     )
 
-    start = st.date_input("开始日期", value=pd.Timestamp(jq_start).date())
-    end = st.date_input("结束日期", value=pd.Timestamp(jq_end).date())
+    is_h1_pro_preset = preset == "H1-Pro 防雷增强（说明书）"
+
+    start = st.date_input("开始日期", value=default_start)
+    end = st.date_input("结束日期", value=default_end)
 
     st.subheader("排名权重")
-    circ_w = st.number_input("流通市值权重", min_value=0.0, max_value=10.0, value=2.0, step=0.5)
-    total_w = st.number_input("总市值权重", min_value=0.0, max_value=10.0, value=1.0, step=0.5)
+    circ_w = st.number_input(
+        "流通市值权重", min_value=0.0, max_value=10.0,
+        value=2.0, step=0.5, disabled=is_h1_pro_preset,
+    )
+    total_w = st.number_input(
+        "总市值权重", min_value=0.0, max_value=10.0,
+        value=1.0, step=0.5, disabled=is_h1_pro_preset,
+    )
 
     st.subheader("模型 II")
-    buy_rank = st.slider("买入：排名 ≤", 1, 30, 8)
-    sell_rank = st.slider("卖出：排名 ≥", 1, 50, 15)
-    max_pos = st.slider("最多持股数", 1, 20, 10)
+    buy_rank = st.slider("买入：排名 ≤", 1, 30, 8, disabled=is_h1_pro_preset)
+    sell_rank = st.slider("卖出：排名 ≥", 1, 50, 15, disabled=is_h1_pro_preset)
+    max_pos = st.slider("最多持股数", 1, 20, 10, disabled=is_h1_pro_preset)
 
     st.subheader("筛选")
-    exclude_st = st.checkbox("排除 ST", value=True)
-    exclude_stib = st.checkbox("排除科创板(688)", value=True)
-    min_money = st.number_input("最低成交额（万元，0=不限）", min_value=0, value=0, step=100) * 10000
-    profit_pos = st.checkbox("扣非净利润 > 0", value=False)
+    exclude_st = st.checkbox("排除 ST", value=True, disabled=is_h1_pro_preset)
+    exclude_stib = st.checkbox("排除科创板(688)", value=True, disabled=is_h1_pro_preset)
+    min_money = st.number_input(
+        "最低成交额（万元，0=不限）", min_value=0,
+        value=0 if not is_h1_pro_preset else 0,
+        step=100, disabled=is_h1_pro_preset,
+    ) * 10000
+    profit_pos = st.checkbox(
+        "扣非净利润 > 0",
+        value=is_h1_pro_preset,
+        disabled=is_h1_pro_preset,
+        help="H1-Pro 默认开启；AkShare/JQ 均支持（Ak 为财务接口近似）",
+    )
 
-    st.subheader("风控（本地免费实现）")
-    empty_14 = st.checkbox("1/4 月空仓", value=False)
-    use_timing = st.checkbox("中证1000 MA20 择时", value=False)
-    stop_loss = st.slider("止损 %（0=关闭）", 0, 30, 0) / 100
+    st.subheader("风控")
+    empty_14 = st.checkbox("1/4 月空仓", value=is_h1_pro_preset, disabled=is_h1_pro_preset)
+    use_timing = st.checkbox(
+        "中证1000 昨日收盘 MA20 择时", value=is_h1_pro_preset, disabled=is_h1_pro_preset,
+    )
+    stop_loss = st.slider(
+        "止损 %（0=关闭）", 0, 30,
+        12 if is_h1_pro_preset else 0,
+        disabled=is_h1_pro_preset,
+    ) / 100
 
     st.subheader("交易")
-    trade_cost = st.number_input("单边交易成本", min_value=0.0, max_value=0.01, value=0.002, step=0.0005, format="%.4f")
-    price_type = st.selectbox("调仓价格", ["open", "close"], format_func=lambda x: "开盘价" if x == "open" else "收盘价")
-    initial_cash = st.number_input("初始资金（元）", min_value=100_000, value=1_000_000, step=100_000)
+    trade_cost = st.number_input(
+        "单边摩擦成本", min_value=0.0, max_value=0.01,
+        value=0.003 if is_h1_pro_preset else 0.002,
+        step=0.0005, format="%.4f", disabled=is_h1_pro_preset,
+    )
+    price_type = st.selectbox(
+        "调仓价格", ["open", "close"],
+        format_func=lambda x: "开盘价" if x == "open" else "收盘价",
+        disabled=is_h1_pro_preset,
+    )
+    initial_cash = st.number_input(
+        "初始资金（元）", min_value=10_000,
+        value=100_000 if is_h1_pro_preset else 1_000_000,
+        step=10_000, disabled=is_h1_pro_preset,
+    )
 
     run_btn = st.button("🚀 开始回测", type="primary", use_container_width=True)
 
 if run_btn:
-    # 按预设覆盖部分参数
-    p_empty_months: tuple[int, ...] = ()
-    p_use_timing = use_timing
-    p_stop_loss = stop_loss
-    p_profit_pos = profit_pos
-    p_min_money = float(min_money)
+    if data_source == "jq" and not jq_ok:
+        st.stop()
 
-    if preset == "H1 基础":
-        p_empty_months = ()
-        p_use_timing = False
-        p_stop_loss = 0.0
-    elif preset == "H1 + 1/4月空仓":
-        p_empty_months = (1, 4)
-    elif preset == "H1 + 中证1000择时":
-        p_use_timing = True
-    elif preset == "H1 Pro（全风控）":
-        p_empty_months = (1, 4)
-        p_use_timing = True
-        p_stop_loss = 0.12
-        p_profit_pos = True
-        p_min_money = 5_000_000.0
+    if preset == "H1-Pro 防雷增强（说明书）":
+        cfg = SmallCapConfig.h1_pro(
+            start=str(start),
+            end=str(end),
+            data_source=data_source,
+            profit_positive=True,
+        )
     else:
-        p_empty_months = (1, 4) if empty_14 else ()
+        p_empty_months: tuple[int, ...] = ()
+        p_use_timing = use_timing
+        p_stop_loss = stop_loss
+        p_profit_pos = profit_pos
+        p_min_money = float(min_money)
 
-    cfg = SmallCapConfig(
-        start=str(start),
-        end=str(end),
-        initial_cash=float(initial_cash),
-        circ_weight=circ_w,
-        total_weight=total_w,
-        buy_rank=buy_rank,
-        sell_rank=sell_rank,
-        max_positions=max_pos,
-        exclude_st=exclude_st,
-        exclude_stib=exclude_stib,
-        min_money=p_min_money,
-        profit_positive=p_profit_pos,
-        empty_months=p_empty_months,
-        stop_loss_pct=p_stop_loss,
-        use_index_timing=p_use_timing,
-        trade_cost=trade_cost,
-        rebalance_price=price_type,
-    )
+        if preset == "H1 基础":
+            p_empty_months = ()
+            p_use_timing = False
+            p_stop_loss = 0.0
+        elif preset == "H1 + 1/4月空仓":
+            p_empty_months = (1, 4)
+        elif preset == "H1 + 中证1000择时":
+            p_use_timing = True
+        else:
+            p_empty_months = (1, 4) if empty_14 else ()
+
+        cfg = SmallCapConfig(
+            start=str(start),
+            end=str(end),
+            initial_cash=float(initial_cash),
+            circ_weight=circ_w,
+            total_weight=total_w,
+            buy_rank=buy_rank,
+            sell_rank=sell_rank,
+            max_positions=max_pos,
+            exclude_st=exclude_st,
+            exclude_stib=exclude_stib,
+            min_money=p_min_money,
+            profit_positive=p_profit_pos,
+            empty_months=p_empty_months,
+            stop_loss_pct=p_stop_loss,
+            use_index_timing=p_use_timing,
+            trade_cost=trade_cost,
+            rebalance_price=price_type,
+            data_source=data_source,
+        )
 
     progress = st.progress(0, text="准备回测…")
     status = st.empty()
 
-    def _cb(cur: int, total: int, day: pd.Timestamp) -> None:
-        progress.progress(cur / total, text=f"回测中 {day.strftime('%Y-%m-%d')} ({cur}/{total})")
+    def _cb(cur: int, total: int, day: pd.Timestamp, phase: str = "") -> None:
+        if total <= 0:
+            return
+        progress.progress(min(cur / total, 1.0), text=f"{phase} ({cur}/{total})")
 
     cfg.progress_callback = _cb
 
-    with st.spinner("正在拉取聚宽数据并模拟交易，请稍候…"):
+    spinner = "正在从 AkShare 下载/读取数据…" if data_source == "akshare" else "正在拉取聚宽数据…"
+    with st.spinner(spinner):
         try:
             result = run_small_cap_backtest(cfg)
+        except QuotaExhaustedError as ex:
+            st.warning(str(ex))
+            st.info(
+                "💡 **JQData 额度不够时**：\n"
+                "1. 明天再点「开始回测」（缓存续拉）\n"
+                "2. 或改用左侧 **AkShare** 数据源（推荐）"
+            )
+            st.stop()
         except Exception as ex:
             st.error(f"回测失败：{ex}")
             st.stop()
@@ -171,20 +257,19 @@ else:
     st.markdown("""
     ### 怎么用？
 
-    1. 左侧选 **预设方案** 或自己调参数（和果仁网页类似）
-    2. 点 **开始回测**
-    3. 看年化、回撤、资金曲线
+    1. 左侧选 **AkShare**（推荐，无额度限制）或 **JQData**
+    2. 选 **预设方案** 或自己调参数
+    3. 点 **开始回测**
 
-    ### 和果仁的区别
+    ### 数据源对比
 
-    | 功能 | 果仁 | 本地实验室 |
-    |------|------|-----------|
-    | 小市值排名 + 模型II | ✅ | ✅ |
-    | 1/4 月空仓 | VIP/公式 | ✅ 免费 |
-    | 中证1000 MA20 择时 | VIP | ✅ 免费 |
-    | 成交额/净利润筛选 | 部分 VIP | ✅ 免费 |
-    | 数据长度 | 多年 | 试用约 1 年 |
-    | 预期ST/审计意见 | ✅ | ❌ 暂未实现 |
+    | | AkShare | JQData |
+    |--|---------|--------|
+    | 费用 | 免费 | 试用免费 |
+    | 每日额度 | 无硬限制 | 100 万条 |
+    | 历史长度 | 较长 | 试用约 1 年 |
+    | 扣非净利润筛选 | ❌ | ✅ |
+    | 首次速度 | 较慢（需缓存） | 中等 |
 
     > 历史回测不代表未来收益，仅供学习研究。
     """)

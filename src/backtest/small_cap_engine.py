@@ -1,8 +1,7 @@
 """
-小市值轮动回测引擎（多标的、日频调仓）。
+小市值轮动回测引擎（H1 / H1-Pro 防雷增强版）。
 
-对应果仁 H1：流通市值权重 2 + 总市值权重 1，模型 II 买卖阈值，开盘价调仓。
-本地额外支持：1/4 月空仓、中证1000 均线择时、止损、成交额/净利润筛选（无需 VIP）。
+H1-Pro 对齐《策略说明书》：六类过滤、昨日 MA20 择时、涨跌停撮合、0.3% 单边摩擦。
 """
 
 from __future__ import annotations
@@ -12,15 +11,16 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
+from src.backtest.backtest_data import BacktestData
 from src.data.fetch_jqdata import _clamp_date_range
-from src.data.jq_market import (
-    fetch_index_series,
-    fetch_price_panel,
-    fetch_universe_snapshot,
-    get_trade_days,
-    rank_universe,
-)
+from src.data.jq_cache import QuotaExhaustedError, load_jq_backtest_data
+from src.data.jq_market import fetch_index_series, get_trade_days, rank_universe
 from src.strategies.small_cap.config import SmallCapConfig
+from src.strategies.small_cap.universe_filter import (
+    apply_universe_filter,
+    is_limit_down_open,
+    is_limit_up_open,
+)
 
 
 @dataclass
@@ -88,16 +88,36 @@ def _yearly_table(equity: pd.Series) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def _index_timing_ok(
+def _index_timing_safe(
     index_close: pd.Series,
-    day: pd.Timestamp,
-    ma_window: int,
+    trade_days: list[pd.Timestamp],
+    day_idx: int,
+    cfg: SmallCapConfig,
 ) -> bool:
-    hist = index_close.loc[:day].dropna()
-    if len(hist) < ma_window:
+    """True=可持股；False=触发强制空仓。Pro 用「昨日」收盘 vs MA20。"""
+    if index_close.empty or not cfg.use_index_timing:
         return True
-    ma = hist.tail(ma_window).mean()
+
+    lag = cfg.index_timing_lag if cfg.h1_pro else 0
+    ref_idx = max(0, day_idx - lag)
+    ref_day = trade_days[ref_idx]
+
+    hist = index_close.loc[:ref_day].dropna()
+    if len(hist) < cfg.index_ma:
+        return True
+    ma = hist.tail(cfg.index_ma).mean()
     return float(hist.iloc[-1]) >= float(ma)
+
+
+def _paused_codes(prices: pd.DataFrame, day: pd.Timestamp, codes: list[str]) -> set[str]:
+    paused: set[str] = set()
+    for code in codes:
+        try:
+            if bool(prices.loc[(day, code)].get("paused", 0)):
+                paused.add(code)
+        except KeyError:
+            continue
+    return paused
 
 
 def _holdings_value(
@@ -116,19 +136,12 @@ def _holdings_value(
     return total
 
 
-def run_small_cap_backtest(cfg: SmallCapConfig) -> SmallCapBacktestResult:
-    """运行小市值策略回测。"""
-    start, end = _clamp_date_range(cfg.start, cfg.end)
-    trade_days = get_trade_days(start, end)
-    if len(trade_days) < 2:
-        raise ValueError(f"交易日不足（{start} ~ {end}），请检查 JQData 账号数据范围。")
-
-    pf = _price_field(cfg)
-
-    index_close = pd.Series(dtype=float)
-    if cfg.use_index_timing:
-        index_close = fetch_index_series(cfg.index_code, start, end)
-
+def _simulate(
+    cfg: SmallCapConfig,
+    data: BacktestData,
+    trade_days: list[pd.Timestamp],
+    pf: str,
+) -> tuple[list, list, int]:
     cash = cfg.initial_cash
     holdings: dict[str, dict] = {}
     etf_shares = 0.0
@@ -136,28 +149,30 @@ def run_small_cap_backtest(cfg: SmallCapConfig) -> SmallCapBacktestResult:
     holdings_rows: list[dict] = []
     trade_count = 0
 
-    total_days = len(trade_days)
     for i, day in enumerate(trade_days):
         if cfg.progress_callback:
-            cfg.progress_callback(i + 1, total_days, day)
+            cfg.progress_callback(i + 1, len(trade_days), day, "模拟交易")
 
-        day_str = day.strftime("%Y-%m-%d")
-        month = day.month
-        seasonal_empty = month in cfg.empty_months
-        timing_empty = (
-            cfg.use_index_timing
-            and not index_close.empty
-            and not _index_timing_ok(index_close, day, cfg.index_ma)
+        seasonal_empty = day.month in cfg.empty_months
+        timing_unsafe = not _index_timing_safe(data.index_close, trade_days, i, cfg)
+        force_empty = seasonal_empty or timing_unsafe
+
+        raw_uni = data.valuation_store.get(day, pd.DataFrame())
+        paused = _paused_codes(
+            data.prices, day, raw_uni["code"].tolist() if not raw_uni.empty else []
         )
-        force_empty = seasonal_empty or timing_empty
 
-        universe = fetch_universe_snapshot(
-            day_str,
-            exclude_st=cfg.exclude_st,
-            exclude_stib=cfg.exclude_stib,
-            min_turnover_ratio=cfg.min_turnover_ratio,
-            min_money=cfg.min_money,
-            profit_positive=cfg.profit_positive,
+        universe = apply_universe_filter(
+            raw_uni,
+            day,
+            cfg,
+            st_flags=data.st_flags,
+            profit_codes=data.profit_store.get(day) if cfg.profit_positive else None,
+            list_dates=data.list_dates or None,
+            bad_audit_codes=data.bad_audit_codes or None,
+            delisting_codes=data.delisting_codes or None,
+            avg_money_map=data.avg_money_maps.get(day),
+            paused_codes=paused,
         )
         ranked = rank_universe(
             universe,
@@ -166,50 +181,47 @@ def run_small_cap_backtest(cfg: SmallCapConfig) -> SmallCapBacktestResult:
         )
         rank_map = dict(zip(ranked["code"], ranked["rank"])) if not ranked.empty else {}
 
-        day_codes = set(holdings.keys())
-        if not ranked.empty:
-            day_codes.update(ranked.head(max(cfg.sell_rank + 5, cfg.max_positions * 2))["code"])
-        if cfg.backup_etf:
-            day_codes.add(cfg.backup_etf)
-
-        prices = fetch_price_panel(
-            list(day_codes),
-            day_str,
-            day_str,
-            fields=[pf, "paused", "high_limit", "low_limit"],
-        )
-        if prices.empty:
-            equity_rows.append((day, cash))
-            continue
-
-        def _px(code: str) -> float | None:
+        def _bar(code: str) -> pd.Series | None:
             try:
-                row = prices.loc[(day, code)]
-                if bool(row.get("paused", 0)):
-                    return None
-                val = float(row[pf])
-                return val if val > 0 else None
+                return data.prices.loc[(day, code)]
             except KeyError:
                 return None
 
+        def _px(code: str) -> float | None:
+            row = _bar(code)
+            if row is None:
+                return None
+            if bool(row.get("paused", 0)):
+                return None
+            val = float(row[pf])
+            return val if val > 0 else None
+
+        # --- 卖出股票（强制空仓时也要卖）---
         for code in list(holdings.keys()):
-            rank = rank_map.get(code, 9999)
             pos = holdings[code]
             px = _px(code)
             if px is None:
                 continue
 
+            rank = rank_map.get(code, 9999)
             loss_pct = (px - pos["cost"]) / pos["cost"] if pos["cost"] > 0 else 0
             should_sell = (
                 force_empty
                 or rank >= cfg.sell_rank
                 or (cfg.stop_loss_pct > 0 and loss_pct <= -cfg.stop_loss_pct)
             )
+
+            if should_sell and cfg.enforce_limit_prices and not force_empty:
+                row = _bar(code)
+                if row is not None and is_limit_down_open(row, px):
+                    should_sell = False
+
             if should_sell:
                 cash += pos["shares"] * px * (1 - cfg.trade_cost)
                 trade_count += 1
                 del holdings[code]
 
+        # --- 黄金 ETF：空仓期买入 / 正常期卖出 ---
         if force_empty and cfg.backup_etf:
             etf_px = _px(cfg.backup_etf)
             if etf_px and cash > 0:
@@ -223,12 +235,15 @@ def run_small_cap_backtest(cfg: SmallCapConfig) -> SmallCapBacktestResult:
                 etf_shares = 0.0
                 trade_count += 1
 
+        # --- 买入 ---
         if not force_empty and not ranked.empty:
             slots = cfg.max_positions - len(holdings)
             if slots > 0:
                 candidates = ranked[ranked["rank"] <= cfg.buy_rank]["code"].tolist()
-                port_value = cash + etf_shares * (_px(cfg.backup_etf) or 0) + _holdings_value(
-                    holdings, prices, day, pf
+                port_value = (
+                    cash
+                    + etf_shares * (_px(cfg.backup_etf) or 0)
+                    + _holdings_value(holdings, data.prices, day, pf)
                 )
                 target_value = port_value / cfg.max_positions
 
@@ -240,13 +255,13 @@ def run_small_cap_backtest(cfg: SmallCapConfig) -> SmallCapBacktestResult:
                     px = _px(code)
                     if px is None:
                         continue
-                    try:
-                        row = prices.loc[(day, code)]
-                        low_limit = float(row.get("low_limit", 0) or 0)
-                        if low_limit > 0 and px <= low_limit * 1.001:
+
+                    row = _bar(code)
+                    if row is not None and cfg.enforce_limit_prices:
+                        if is_limit_up_open(row, px):
                             continue
-                    except KeyError:
-                        pass
+                        if is_limit_down_open(row, px):
+                            continue
 
                     buy_cash = min(cash, target_value)
                     if buy_cash < target_value * 0.5:
@@ -262,7 +277,7 @@ def run_small_cap_backtest(cfg: SmallCapConfig) -> SmallCapBacktestResult:
         total_equity = (
             cash
             + etf_shares * (_px(cfg.backup_etf) or 0)
-            + _holdings_value(holdings, prices, day, pf)
+            + _holdings_value(holdings, data.prices, day, pf)
         )
         equity_rows.append((day, total_equity))
         holdings_rows.append(
@@ -273,12 +288,50 @@ def run_small_cap_backtest(cfg: SmallCapConfig) -> SmallCapBacktestResult:
                 "etf_shares": etf_shares,
                 "cash": cash,
                 "equity": total_equity,
+                "force_empty": force_empty,
             }
         )
 
+    return equity_rows, holdings_rows, trade_count
+
+
+def run_small_cap_backtest(cfg: SmallCapConfig) -> SmallCapBacktestResult:
+    """运行小市值策略回测。"""
+    use_ak = cfg.data_source.lower() in ("ak", "akshare")
+    pf = _price_field(cfg)
+
+    if use_ak:
+        from src.data.ak_cache import fetch_index_series as ak_fetch_index
+        from src.data.ak_cache import prepare_akshare_data
+        from src.data.ak_market import get_trade_days as ak_get_trade_days
+
+        start = pd.Timestamp(cfg.start).strftime("%Y-%m-%d")
+        end = (
+            pd.Timestamp(cfg.end).strftime("%Y-%m-%d")
+            if cfg.end
+            else pd.Timestamp.today().strftime("%Y-%m-%d")
+        )
+        trade_days = ak_get_trade_days(start, end)
+        if len(trade_days) < 2:
+            raise ValueError(f"交易日不足（{start} ~ {end}）。")
+
+        data = prepare_akshare_data(trade_days, start, end, cfg)
+        fetch_bench = ak_fetch_index
+    else:
+        start, end = _clamp_date_range(cfg.start, cfg.end)
+        trade_days = get_trade_days(start, end)
+        if len(trade_days) < 2:
+            raise ValueError(
+                f"交易日不足（{start} ~ {end}），请检查 JQData 账号数据范围。"
+            )
+        data = load_jq_backtest_data(cfg, trade_days, start, end, pf)
+        fetch_bench = fetch_index_series
+
+    equity_rows, holdings_rows, trade_count = _simulate(cfg, data, trade_days, pf)
+
     equity = pd.Series({d: v for d, v in equity_rows}, name="equity").sort_index()
 
-    bench = fetch_index_series("000852.XSHG", start, end)
+    bench = fetch_bench("000852.XSHG", start, end)
     if not bench.empty:
         bench = bench.reindex(equity.index).ffill()
         bench = cfg.initial_cash * (bench / bench.iloc[0])

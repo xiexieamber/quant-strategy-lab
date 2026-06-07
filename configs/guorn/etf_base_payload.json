@@ -1,0 +1,80 @@
+{
+  "filters": [
+    {
+      "id": "0.A.基金类别.0",
+      "op": "in",
+      "val": [0, 1, 2, 4, 5],
+      "type": "attr"
+    },
+    {
+      "id": "0.A.投资种类.0",
+      "op": "in",
+      "val": [0, 1, 3, 4, 5, 6, 7, 8],
+      "type": "attr"
+    },
+    {
+      "industry": null,
+      "id": "0.M.ETF每日指标_20日涨幅.0",
+      "op": "gt",
+      "type": "meas",
+      "val": 0
+    }
+  ],
+  "ranks": [
+    {
+      "id": "0.M.ETF每日指标_20日涨幅.0",
+      "weight": 1,
+      "industry": null,
+      "asc": false
+    }
+  ],
+  "pool": "2785995.P.366060702642012",
+  "start": "2021/01/01",
+  "end": "2026/06/05",
+  "reference": "000300",
+  "hedge": false,
+  "original_vol": false,
+  "trade_cost": 0.001,
+  "count": "10",
+  "period": 5,
+  "backup_fund": "511880",
+  "position_limit": 0.5,
+  "price": "close",
+  "always_tradable": 0,
+  "trading_strategy": {
+    "buy_options": [
+      {
+        "id": "0.BM.排名名次.0",
+        "op": "le",
+        "val": "2"
+      },
+      {
+        "id": "0.BM.调仓日交易时非跌停.0",
+        "op": null,
+        "val": ""
+      }
+    ],
+    "sell_options": [
+      {
+        "id": "0.SM.排名名次.0",
+        "op": "ge",
+        "val": "3"
+      }
+    ],
+    "hold_options": []
+  },
+  "model": 1,
+  "backup_num": "5",
+  "ideal_position": 0.5,
+  "min_position": 0,
+  "position_bias": 0.3,
+  "ideal_count": 2,
+  "max_count": 2,
+  "timing": {
+    "indicators": [],
+    "position": "0",
+    "threshold": ["-1", "-1"]
+  },
+  "category": "fund",
+  "calc_id": "2785995.1780832304319"
+}

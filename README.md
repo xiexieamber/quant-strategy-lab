@@ -93,7 +93,7 @@ python3 scripts/test_jq_auth.py
 # 拉取 A 股真实数据
 python3 scripts/fetch_jqdata_demo.py
 
-# 启动本地小市值实验室（果仁 H1 风格界面，需 JQData）
+# 启动本地小市值实验室（果仁 H1 风格界面，默认 AkShare 免费数据源）
 python3 scripts/run_small_cap_lab.py
 
 # 运行测试

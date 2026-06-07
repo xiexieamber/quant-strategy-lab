@@ -1,0 +1,29 @@
+[
+  {
+    "id": "E0",
+    "name": "错误基准(涨幅从小到大)",
+    "patches": {
+      "ranks.0.asc": true,
+      "start": "2023/01/02"
+    }
+  },
+  {
+    "id": "E1",
+    "name": "修正基准(5日调仓)",
+    "patches": {}
+  },
+  {
+    "id": "E2",
+    "name": "修正+10日调仓",
+    "patches": {
+      "period": 10
+    }
+  },
+  {
+    "id": "E3",
+    "name": "修正+20日调仓",
+    "patches": {
+      "period": 20
+    }
+  }
+]

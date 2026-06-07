@@ -27,6 +27,12 @@ data/processed/
 # 回测结果
 results/
 
+# 聚宽本地数据缓存（体积大，可本地重建）
+data/processed/jq_cache/
+
+# AkShare 本地数据缓存
+data/processed/ak_cache/
+
 # 果仁敏感配置（含 Cookie / 完整策略 payload）
 configs/guorn/base_payload.json
 configs/guorn/payloads/

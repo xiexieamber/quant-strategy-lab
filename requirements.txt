@@ -9,6 +9,9 @@ yfinance>=0.2.40
 # 安装: python3 -m pip install jqdatasdk
 jqdatasdk>=1.9.0
 
+# AkShare（A 股免费数据，无需账号）
+akshare>=1.14.0
+
 # 画图
 matplotlib>=3.7.0
 
