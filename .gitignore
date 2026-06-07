@@ -26,5 +26,9 @@ data/processed/
 
 # 回测结果
 results/
+
+# 果仁敏感配置（含 Cookie / 完整策略 payload）
+configs/guorn/base_payload.json
+configs/guorn/payloads/
 reports/*.html
 reports/*.png

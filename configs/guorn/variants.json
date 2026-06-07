@@ -1,0 +1,80 @@
+[
+  {
+    "id": "A1",
+    "name": "基准（无空仓）",
+    "patches": {}
+  },
+  {
+    "id": "A2",
+    "name": "1+4月空仓",
+    "note": "需在果仁网页配好空仓后，另存 payload 到 configs/guorn/payloads/A2.json，并取消下行注释",
+    "payload_file": "payloads/A2.json",
+    "patches": {}
+  },
+  {
+    "id": "B1",
+    "name": "卖≥15（换手更高）",
+    "patches": {
+      "trading_strategy.sell_options.0.val": "15"
+    }
+  },
+  {
+    "id": "B2",
+    "name": "卖≥25（换手更低）",
+    "patches": {
+      "trading_strategy.sell_options.0.val": "25"
+    }
+  },
+  {
+    "id": "C1",
+    "name": "买≤8（更严格）",
+    "patches": {
+      "trading_strategy.buy_options.0.val": "8"
+    }
+  },
+  {
+    "id": "C2",
+    "name": "买≤15（更宽松）",
+    "patches": {
+      "trading_strategy.buy_options.0.val": "15"
+    }
+  },
+  {
+    "id": "D1",
+    "name": "约8只股（12%仓位）",
+    "patches": {
+      "ideal_position": 0.12,
+      "ideal_count": 8
+    }
+  },
+  {
+    "id": "D2",
+    "name": "约15只股（7%仓位）",
+    "patches": {
+      "ideal_position": 0.07,
+      "ideal_count": 15
+    }
+  },
+  {
+    "id": "E1",
+    "name": "3日调仓",
+    "patches": {
+      "period": 3
+    }
+  },
+  {
+    "id": "E2",
+    "name": "5日调仓",
+    "patches": {
+      "period": 5
+    }
+  },
+  {
+    "id": "F1",
+    "name": "无黄金ETF",
+    "patches": {
+      "backup_fund": "",
+      "backup_num": "0"
+    }
+  }
+]

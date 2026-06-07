@@ -1,0 +1,114 @@
+{
+  "filters": [
+      {
+          "industry": 0,
+          "id": "0.M.股票净利润预告指标_预期ST.0",
+          "op": "eq",
+          "type": "meas",
+          "val": "0"
+      },
+      {
+          "industry": 0,
+          "id": "0.M.股票净利润预告指标_预期ST2021.0",
+          "op": "eq",
+          "type": "meas",
+          "val": "0"
+      },
+      {
+          "industry": 0,
+          "id": "0.M.股票审计意见指标_年报审计意见.0",
+          "op": "eq",
+          "type": "meas",
+          "val": "1"
+      },
+      {
+          "industry": 0,
+          "id": "0.M.股票净利润预告指标_年报公布逾期.0",
+          "op": "eq",
+          "type": "meas",
+          "val": "0"
+      },
+      {
+          "industry": 0,
+          "id": "0.M.股票每日指标_违规处罚标记.0",
+          "op": "eq",
+          "type": "meas",
+          "val": "0"
+      }
+  ],
+  "ranks": [
+      {
+          "id": "0.M.股票每日指标_流通市值.0",
+          "weight": 1,
+          "industry": 0,
+          "asc": true
+      },
+      {
+          "id": "0.M.股票每日指标_总市值.0",
+          "weight": 1,
+          "industry": 0,
+          "asc": true
+      }
+  ],
+  "exclude_st": "1",
+  "exclude_STIB": 1,
+  "industry_type": 1,
+  "filter_suspend": true,
+  "start": "2021/01/01",
+  "end": "2026/06/05",
+  "reference": "000300",
+  "hedge": false,
+  "original_vol": false,
+  "trade_cost": 0.002,
+  "count": "10",
+  "period": 1,
+  "backup_fund": "518880",
+  "position_limit": 1,
+  "price": "open",
+  "always_tradable": 0,
+  "trading_strategy": {
+      "buy_options": [
+          {
+              "id": "0.BM.排名名次.0",
+              "op": "le",
+              "val": "12"
+          },
+          {
+              "id": "0.BM.调仓日交易时非跌停.0",
+              "op": null,
+              "val": ""
+          }
+      ],
+      "sell_options": [
+          {
+              "id": "0.SM.排名名次.0",
+              "op": "ge",
+              "val": "20"
+          }
+      ],
+      "hold_options": [
+          {
+              "id": "0.HM.调仓前一日收盘涨停.0",
+              "op": null,
+              "val": ""
+          }
+      ]
+  },
+  "model": 1,
+  "backup_num": "3",
+  "ideal_position": 0.1,
+  "min_position": 0.05,
+  "position_bias": 0.4,
+  "ideal_count": 10,
+  "max_count": 16,
+  "timing": {
+      "indicators": [],
+      "position": "0",
+      "threshold": [
+          "-1",
+          "-1"
+      ]
+  },
+  "category": "stock",
+  "calc_id": "2785995.1780822680194"
+}

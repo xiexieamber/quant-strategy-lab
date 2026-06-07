@@ -61,9 +61,9 @@ quant-strategy-lab/
 
 1. 阅读 [入门指南](docs/01-入门指南.md)
 2. 阅读 [策略开发流程](docs/02-策略开发流程.md)
-3. 运行 `scripts/run_backtest.py`，观察输出
-4. 打开 `notebooks/01_双均线策略入门.ipynb` 逐步理解
-5. 修改 `strategies/dual_ma/config.yaml` 里的参数，重新回测
+3. 使用 A 股数据时查阅 [JQData API 参考](docs/jqdata-api-reference.md)
+4. 本地跑小市值策略：[本地小市值实验室](docs/05-本地小市值实验室.md)
+5. 运行 `scripts/run_backtest.py`，观察输出
 6. 在 `src/strategies/` 下编写自己的策略
 
 ## 第一个示例策略：双均线
@@ -86,6 +86,15 @@ quant-strategy-lab/
 ```bash
 # 运行回测
 python scripts/run_backtest.py
+
+# 测试聚宽 JQData 登录
+python3 scripts/test_jq_auth.py
+
+# 拉取 A 股真实数据
+python3 scripts/fetch_jqdata_demo.py
+
+# 启动本地小市值实验室（果仁 H1 风格界面，需 JQData）
+python3 scripts/run_small_cap_lab.py
 
 # 运行测试
 pytest tests/ -v
