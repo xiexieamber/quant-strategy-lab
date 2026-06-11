@@ -2,7 +2,7 @@
 
 对应《小市值防雷增强版 H1-Pro》完整逻辑，代码入口：
 
-- 配置：`src/strategies/small_cap/config.py` → `SmallCapConfig.h1_pro()`
+- 配置：`src/strategies/small_cap/config.py` → `SmallCapConfig.for_h1_pro()`
 - 过滤：`src/strategies/small_cap/universe_filter.py`
 - 回测：`src/backtest/small_cap_engine.py`
 - 界面：预设 **「H1-Pro 防雷增强（说明书）」**
@@ -31,7 +31,7 @@
 from src.strategies.small_cap.config import SmallCapConfig
 from src.backtest.small_cap_engine import run_small_cap_backtest
 
-cfg = SmallCapConfig.h1_pro(
+cfg = SmallCapConfig.for_h1_pro(
     start="2025-01-01",
     end="2025-06-01",
     data_source="akshare",  # 或 "jq"

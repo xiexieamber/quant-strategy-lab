@@ -24,6 +24,10 @@ from src.data.ak_market import get_date_range_hint
 from src.data.jq_cache import QuotaExhaustedError, get_jq_spare_quota
 from src.strategies.small_cap.config import SmallCapConfig
 
+GUORN_H1_PRESET = "果仁 H1 对齐（买≤12 卖≥20）"
+H1_PRO_PRESET = "H1-Pro 防雷增强（说明书）"
+LOCKED_PRESETS = {H1_PRO_PRESET, GUORN_H1_PRESET}
+
 st.set_page_config(
     page_title="小市值实验室",
     page_icon="📊",
@@ -63,7 +67,12 @@ else:
     st.success(
         f"**AkShare** 免费、无每日 100 万条限制。  \n"
         f"建议回测区间：约 **{ak_start}** ~ **{ak_end}**（可自定义更长，数据来自东方财富）。  \n"
-        f"⚠️ **首次回测**需下载约 4000+ 只股票数据（约 30～60 分钟），之后本地缓存秒开。"
+        f"⚠️ **首次回测**：先拉全市场市值（约 **8～15 分钟**），再拉候选股详情（约 **2～5 分钟**），"
+        f"之后本地缓存 **秒开**。缩短回测区间可更快完成首次下载。"
+    )
+    st.warning(
+        "**H1-Pro + AkShare**：净利润 / 5 日均成交额等过滤依赖候选股详情；"
+        "与果仁仍有数据差异。若要更接近果仁，请改用 **JQData**。"
     )
 
 default_start = pd.Timestamp(jq_start if jq_ok and jq_start else ak_start).date()
@@ -75,7 +84,8 @@ with st.sidebar:
     preset = st.selectbox(
         "预设方案",
         [
-            "H1-Pro 防雷增强（说明书）",
+            GUORN_H1_PRESET,
+            H1_PRO_PRESET,
             "H1 基础",
             "H1 + 1/4月空仓",
             "H1 + 中证1000择时",
@@ -83,67 +93,89 @@ with st.sidebar:
         ],
     )
 
-    is_h1_pro_preset = preset == "H1-Pro 防雷增强（说明书）"
+    is_h1_pro_preset = preset == H1_PRO_PRESET
+    is_guorn_preset = preset == GUORN_H1_PRESET
+    is_locked_preset = preset in LOCKED_PRESETS
 
-    start = st.date_input("开始日期", value=default_start)
-    end = st.date_input("结束日期", value=default_end)
+    if is_guorn_preset:
+        start_default = pd.Timestamp("2025-03-03").date()
+        end_default = pd.Timestamp("2026-03-02").date()
+        st.caption(
+            "与果仁 payload 对齐：买≤12 卖≥20、市值权重 1:1、无择时空仓。"
+            "预期 ST / 审计意见等筛选在 **JQData** 下更完整。"
+        )
+    else:
+        start_default = default_start
+        end_default = default_end
+
+    start = st.date_input("开始日期", value=start_default)
+    end = st.date_input("结束日期", value=end_default)
 
     st.subheader("排名权重")
     circ_w = st.number_input(
         "流通市值权重", min_value=0.0, max_value=10.0,
-        value=2.0, step=0.5, disabled=is_h1_pro_preset,
+        value=1.0 if is_guorn_preset else 2.0,
+        step=0.5, disabled=is_locked_preset,
     )
     total_w = st.number_input(
         "总市值权重", min_value=0.0, max_value=10.0,
-        value=1.0, step=0.5, disabled=is_h1_pro_preset,
+        value=1.0, step=0.5, disabled=is_locked_preset,
     )
 
     st.subheader("模型 II")
-    buy_rank = st.slider("买入：排名 ≤", 1, 30, 8, disabled=is_h1_pro_preset)
-    sell_rank = st.slider("卖出：排名 ≥", 1, 50, 15, disabled=is_h1_pro_preset)
-    max_pos = st.slider("最多持股数", 1, 20, 10, disabled=is_h1_pro_preset)
+    buy_rank = st.slider(
+        "买入：排名 ≤", 1, 30,
+        12 if is_guorn_preset else 8,
+        disabled=is_locked_preset,
+    )
+    sell_rank = st.slider(
+        "卖出：排名 ≥", 1, 50,
+        20 if is_guorn_preset else 15,
+        disabled=is_locked_preset,
+    )
+    max_pos = st.slider("最多持股数", 1, 20, 10, disabled=is_locked_preset)
 
     st.subheader("筛选")
-    exclude_st = st.checkbox("排除 ST", value=True, disabled=is_h1_pro_preset)
-    exclude_stib = st.checkbox("排除科创板(688)", value=True, disabled=is_h1_pro_preset)
+    exclude_st = st.checkbox("排除 ST", value=True, disabled=is_locked_preset)
+    exclude_stib = st.checkbox("排除科创板(688)", value=True, disabled=is_locked_preset)
     min_money = st.number_input(
         "最低成交额（万元，0=不限）", min_value=0,
-        value=0 if not is_h1_pro_preset else 0,
-        step=100, disabled=is_h1_pro_preset,
+        value=0,
+        step=100, disabled=is_locked_preset,
     ) * 10000
     profit_pos = st.checkbox(
         "扣非净利润 > 0",
         value=is_h1_pro_preset,
-        disabled=is_h1_pro_preset,
+        disabled=is_locked_preset,
         help="H1-Pro 默认开启；AkShare/JQ 均支持（Ak 为财务接口近似）",
     )
 
     st.subheader("风控")
-    empty_14 = st.checkbox("1/4 月空仓", value=is_h1_pro_preset, disabled=is_h1_pro_preset)
+    empty_14 = st.checkbox("1/4 月空仓", value=is_h1_pro_preset, disabled=is_locked_preset)
     use_timing = st.checkbox(
-        "中证1000 昨日收盘 MA20 择时", value=is_h1_pro_preset, disabled=is_h1_pro_preset,
+        "中证1000 昨日收盘 MA20 择时", value=is_h1_pro_preset, disabled=is_locked_preset,
     )
     stop_loss = st.slider(
         "止损 %（0=关闭）", 0, 30,
         12 if is_h1_pro_preset else 0,
-        disabled=is_h1_pro_preset,
+        disabled=is_locked_preset,
     ) / 100
 
     st.subheader("交易")
     trade_cost = st.number_input(
         "单边摩擦成本", min_value=0.0, max_value=0.01,
         value=0.003 if is_h1_pro_preset else 0.002,
-        step=0.0005, format="%.4f", disabled=is_h1_pro_preset,
+        step=0.0005, format="%.4f", disabled=is_locked_preset,
     )
     price_type = st.selectbox(
         "调仓价格", ["open", "close"],
         format_func=lambda x: "开盘价" if x == "open" else "收盘价",
-        disabled=is_h1_pro_preset,
+        disabled=is_locked_preset,
     )
     initial_cash = st.number_input(
         "初始资金（元）", min_value=10_000,
         value=100_000 if is_h1_pro_preset else 1_000_000,
-        step=10_000, disabled=is_h1_pro_preset,
+        step=10_000, disabled=is_locked_preset,
     )
 
     run_btn = st.button("🚀 开始回测", type="primary", use_container_width=True)
@@ -152,8 +184,14 @@ if run_btn:
     if data_source == "jq" and not jq_ok:
         st.stop()
 
-    if preset == "H1-Pro 防雷增强（说明书）":
-        cfg = SmallCapConfig.h1_pro(
+    if preset == GUORN_H1_PRESET:
+        cfg = SmallCapConfig.for_guorn_h1(
+            start=str(start),
+            end=str(end),
+            data_source=data_source,
+        )
+    elif preset == H1_PRO_PRESET:
+        cfg = SmallCapConfig.for_h1_pro(
             start=str(start),
             end=str(end),
             data_source=data_source,

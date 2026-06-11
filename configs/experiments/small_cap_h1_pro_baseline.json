@@ -1,0 +1,25 @@
+{
+  "name": "small-cap-h1-pro-baseline",
+  "strategy": "small_cap",
+  "preset": "h1_pro",
+  "description": "Baseline H1-Pro small-cap experiment for a CNY 100000 account.",
+  "overrides": {
+    "initial_cash": 100000,
+    "start": "2021-01-01",
+    "end": null,
+    "data_source": "akshare"
+  },
+  "validation_plan": {
+    "method": "manual_split_first",
+    "train": ["2021-01-01", "2023-12-31"],
+    "validation": ["2024-01-01", "2024-12-31"],
+    "test": ["2025-01-01", "latest_complete_trade_day"]
+  },
+  "risk_plan": {
+    "capital": 100000,
+    "single_trade_risk_pct": [0.005, 0.01],
+    "drawdown_warning_pct": 0.08,
+    "drawdown_review_pct": 0.12,
+    "leverage": 0
+  }
+}

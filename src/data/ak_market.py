@@ -44,7 +44,7 @@ def to_ak_symbol(code: str) -> str:
 def code_filter(code6: str, exclude_stib: bool) -> bool:
     if exclude_stib and code6.startswith("688"):
         return False
-    if code6.startswith(("8", "4")):
+    if code6.startswith(("8", "4", "9")):
         return False
     return True
 

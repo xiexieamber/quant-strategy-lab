@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 
 @dataclass
 class SmallCapConfig:
-    """策略参数。`h1_pro=True` 或 `SmallCapConfig.h1_pro()` 启用防雷增强版默认值。"""
+    """策略参数。`for_h1_pro()` / `for_guorn_h1()` 为预设工厂方法。"""
 
     start: str = "2025-03-01"
     end: str | None = None
@@ -60,7 +60,7 @@ class SmallCapConfig:
     progress_callback: object | None = field(default=None, repr=False)
 
     @classmethod
-    def h1_pro(cls, **overrides) -> SmallCapConfig:
+    def for_h1_pro(cls, **overrides) -> SmallCapConfig:
         """《小市值防雷增强版 H1-Pro》说明书默认参数。"""
         defaults: dict = {
             "h1_pro": True,
@@ -85,6 +85,36 @@ class SmallCapConfig:
             "use_index_timing": True,
             "index_timing_lag": 1,
             "enforce_limit_prices": True,
+            "rebalance_price": "open",
+        }
+        defaults.update(overrides)
+        return cls(**defaults)
+
+    @classmethod
+    def for_guorn_h1(cls, **overrides) -> SmallCapConfig:
+        """对齐果仁网页 H1 基础策略（买≤12 卖≥20，市值权重 1:1，无择时空仓）。"""
+        defaults: dict = {
+            "h1_pro": False,
+            "start": "2025-03-03",
+            "end": "2026-03-02",
+            "initial_cash": 1_000_000.0,
+            "trade_cost": 0.002,
+            "buy_rank": 12,
+            "sell_rank": 20,
+            "max_positions": 10,
+            "circ_weight": 1.0,
+            "total_weight": 1.0,
+            "exclude_st": True,
+            "exclude_stib": True,
+            "exclude_bse": True,
+            "profit_positive": False,
+            "exclude_bad_audit": True,
+            "exclude_delisting": True,
+            "empty_months": (),
+            "stop_loss_pct": 0.0,
+            "use_index_timing": False,
+            "index_timing_lag": 0,
+            "enforce_limit_prices": False,
             "rebalance_price": "open",
         }
         defaults.update(overrides)

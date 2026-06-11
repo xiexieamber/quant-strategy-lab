@@ -1,0 +1,118 @@
+name: A-Share Serenity Quant Strategy v1
+capital: 50000
+max_first_batch_position_pct: 0.6
+max_single_position_pct: 0.3
+min_cash_pct: 0.3
+lot_size: 100
+allow_star_market: false
+allow_chinext: true
+
+score_thresholds:
+  buy: 75
+  watch: 60
+
+risk_rules:
+  stop_loss_half_pct: -0.08
+  stop_loss_exit_pct: -0.12
+  portfolio_pause_add_pct: -0.08
+  portfolio_reduce_pct: -0.12
+  hot_20d_return_pct: 0.35
+  crowded_ytd_position: 0.9
+
+weights:
+  serenity: 30
+  trend: 20
+  liquidity: 15
+  quality: 15
+  catalyst: 10
+  risk: 20
+
+universe:
+  - code: "002156"
+    name: 通富微电
+    theme: AI/HPC 封测、先进封装
+    layer: 先进封测
+    serenity_score: 78
+    quality_score: 68
+    catalyst_score: 72
+    lot_priority: 1
+  - code: "002472"
+    name: 双环传动
+    theme: 机器人精密传动
+    layer: 精密传动
+    serenity_score: 72
+    quality_score: 70
+    catalyst_score: 65
+    lot_priority: 2
+  - code: "003021"
+    name: 兆威机电
+    theme: 机器人灵巧手/微传动
+    layer: 微型传动
+    serenity_score: 64
+    quality_score: 58
+    catalyst_score: 62
+    lot_priority: 4
+  - code: "688120"
+    name: 华海清科
+    theme: CMP、减薄、先进封装设备
+    layer: 半导体设备卡点
+    serenity_score: 88
+    quality_score: 78
+    catalyst_score: 75
+    lot_priority: 3
+  - code: "688019"
+    name: 安集科技
+    theme: CMP 抛光液、湿电子化学品
+    layer: 半导体材料耗材
+    serenity_score: 84
+    quality_score: 76
+    catalyst_score: 70
+    lot_priority: 5
+  - code: "688012"
+    name: 中微公司
+    theme: 刻蚀设备、半导体设备国产替代
+    layer: 刻蚀设备
+    serenity_score: 86
+    quality_score: 82
+    catalyst_score: 72
+    lot_priority: 6
+  - code: "300394"
+    name: 天孚通信
+    theme: CPO/高速光器件
+    layer: 光互联上游
+    serenity_score: 75
+    quality_score: 75
+    catalyst_score: 82
+    lot_priority: 7
+  - code: "300502"
+    name: 新易盛
+    theme: 高速光模块
+    layer: CPO/1.6T 光模块
+    serenity_score: 80
+    quality_score: 78
+    catalyst_score: 88
+    lot_priority: 9
+  - code: "300308"
+    name: 中际旭创
+    theme: 高速光模块
+    layer: CPO/1.6T 光模块
+    serenity_score: 82
+    quality_score: 82
+    catalyst_score: 88
+    lot_priority: 10
+  - code: "688017"
+    name: 绿的谐波
+    theme: 人形机器人谐波减速器
+    layer: 精密减速器
+    serenity_score: 86
+    quality_score: 70
+    catalyst_score: 86
+    lot_priority: 8
+  - code: "300757"
+    name: 罗博特科
+    theme: AI 光伏/机器人高弹性设备
+    layer: 自动化设备
+    serenity_score: 68
+    quality_score: 60
+    catalyst_score: 70
+    lot_priority: 11

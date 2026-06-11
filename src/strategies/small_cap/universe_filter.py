@@ -34,7 +34,7 @@ def apply_universe_filter(
         if not _code_filter(code, cfg.exclude_stib):
             return False
         num = code.split(".")[0]
-        if cfg.exclude_bse and num.startswith("8"):
+        if cfg.exclude_bse and num.startswith(("8", "4", "9")):
             return False
         return True
 
